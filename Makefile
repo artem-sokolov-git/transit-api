@@ -36,6 +36,11 @@ check: ## Ruff lint and format check
 	@uv run ty check
 	@echo "$(GREEN)>>> Checks passed$(RESET)"
 
+tests: ## Run tests
+	@echo "$(CYAN)>>> Running tests...$(RESET)"
+	@uv run pytest tests/
+	@echo "$(GREEN)>>> Tests passed$(RESET)"
+
 ## DEVELOPMENT
 rebuild: ## Dev rebuild project
 	@$(MAKE) clear
