@@ -10,39 +10,86 @@ REST API поверх открытых данных STM (Société de transport 
 | GTFS Static (расписание) | `https://www.stm.info/sites/default/files/gtfs/gtfs_stm.zip` | Без регистрации |
 | GTFS-RT TripUpdates      | `https://api.stm.info/pub/od/gtfs-rt/ic/v2/tripUpdates`      | API-ключ        |
 | GTFS-RT VehiclePositions | `https://api.stm.info/pub/od/gtfs-rt/ic/v2/vehiclePositions` | API-ключ        |
+| Service Status           | `https://api.stm.info/pub/od/i3/v2/messages/etatservice`     | API-ключ        |
 
 Регистрация: https://portail.developpeurs.stm.info/apihub
 
 ## Стек
+
 - **FastAPI** — REST API
-- **gtfs_kit** — парсинг GTFS Static (остановки, маршруты)
-- **gtfs-realtime-bindings** — парсинг GTFS-RT protobuf
-- **httpx** — async запросы к STM API
+- **Granian** — ASGI-сервер (замена uvicorn)
+- **httpx** — HTTP-клиент для запросов к STM API
+- **pydantic-settings** — конфигурация через переменные окружения
 - **uv** — менеджер пакетов
+- **pytest** — интеграционные тесты
+- **ruff** — линтер и форматтер
+- **Docker / Docker Compose** — контейнеризация
 
 ## Структура проекта
 
 ```
 stm-api/
-├── app/
-│   ├── main.py
-│   ├── gtfs/
-│   │   ├── static.py       # загрузка и парсинг GTFS ZIP
-│   │   ├── realtime.py     # запросы к STM GTFS-RT
-│   │   └── models.py       # dataclasses: Stop, Departure, Route
-│   ├── api/
-│   │   ├── stops.py        # GET /stops/nearby, GET /stops/{id}/departures
-│   │   ├── routes.py       # GET /routes/{id}
-│   │   └── vehicles.py     # GET /vehicles/positions
-│   └── services/
-│       ├── stops.py        # find_nearby_stops(), get_departures()
-│       └── cache.py        # in-memory кэш
-├── docker-compose.yml
+├── core/
+│   ├── __init__.py
+│   ├── config.py           # pydantic-settings: токен, URL endpoints
+│   └── main.py             # FastAPI app, /ping healthcheck
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py         # pytest fixtures (httpx.Client с apikey)
+│   └── test_stm_status.py  # интеграционные тесты STM API
+├── .env                    # переменные окружения (TOKEN)
+├── .pre-commit-config.yaml # ruff + стандартные хуки
+├── docker-compose.yaml
+├── Dockerfile
+├── Makefile
 ├── pyproject.toml
-└── README.md
+└── uv.lock
 ```
 
-## API Endpoints
+## Конфигурация
+
+Настройки читаются из `.env` через `pydantic-settings`:
+
+```python
+# core/config.py
+class Settings(ApplicationSettings, GTFSRealtimeSettings, STMServiceStatusSettings):
+    pass
+
+settings = Settings()
+```
+
+`.env`:
+```dotenv
+TOKEN=your_api_key_here
+```
+
+Переменная `TOKEN` используется как `apikey` в заголовках запросов к STM API.
+
+## Доступные команды (Makefile)
+
+```
+make run       # Собрать и запустить контейнер
+make down      # Остановить контейнер
+make clear     # Остановить и удалить volumes
+make logs      # Логи контейнера
+make check     # ruff lint + format check + ty check
+make tests     # Запустить pytest
+make rebuild   # Пересобрать проект с нуля
+```
+
+## Запуск
+
+```bash
+# Локально
+uv run granian --interface asgi --host 0.0.0.0 --port 8000 core.main:app
+
+# Docker
+make run
+```
+
+Healthcheck: `GET /ping` → `{"status": "ok"}`
+
+## Планируемые API Endpoints
 
 ```
 GET /stops/nearby?lat=45.508&lon=-73.587&radius=500
@@ -51,91 +98,40 @@ GET /vehicles/positions?route_id=69
 GET /routes?search=69
 ```
 
-## Структура GTFS-RT (TripUpdate)
+## Планируемая структура проекта
 
 ```
-FeedMessage
-└── entity[]
-      └── trip_update
-            ├── trip
-            │     ├── trip_id      # → trips.txt в GTFS Static
-            │     ├── route_id     # номер маршрута ("69")
-            │     └── schedule_relationship  # SCHEDULED | CANCELED
-            ├── delay              # секунды (+опаздывает, -опережает)
-            └── stop_time_update[]
-                  ├── stop_id
-                  ├── arrival.time    # Unix timestamp
-                  ├── arrival.delay   # секунды
-                  └── departure.time
+core/
+├── main.py
+├── config.py
+├── gtfs/
+│   ├── static.py       # загрузка и парсинг GTFS ZIP
+│   ├── realtime.py     # запросы к STM GTFS-RT
+│   └── models.py       # dataclasses: Stop, Departure, Route
+├── api/
+│   ├── stops.py        # GET /stops/nearby, GET /stops/{id}/departures
+│   ├── routes.py       # GET /routes/{id}
+│   └── vehicles.py     # GET /vehicles/positions
+└── services/
+    ├── stops.py        # find_nearby_stops(), get_departures()
+    └── cache.py        # in-memory кэш
 ```
 
-## Telegram-бот (отдельный репозиторий)
-- Клиент к stm-api через httpx
-- Кнопка `request_location=True` → получаем lat/lon
-- Запрос к `GET /stops/nearby` → список ближайших автобусов
-- Live Location через `@router.edited_message(F.location)` для обновлений
+## Статус
 
-## Алгоритм поиска ближайших остановок
-
-```python
-from math import radians, sin, cos, sqrt, atan2
-
-def haversine(lat1, lon1, lat2, lon2) -> float:
-    """Возвращает расстояние в метрах"""
-    R = 6_371_000
-    φ1, φ2 = radians(lat1), radians(lat2)
-    dφ, dλ = radians(lat2 - lat1), radians(lon2 - lon1)
-    a = sin(dφ/2)**2 + cos(φ1) * cos(φ2) * sin(dλ/2)**2
-    return R * 2 * atan2(sqrt(a), sqrt(1-a))
-```
+- [x] Зарегистрироваться на portail.developpeurs.stm.info
+- [x] Инициализировать проект (`uv init stm-api`)
+- [x] Конфигурация через pydantic-settings
+- [x] Docker / Docker Compose с healthcheck
+- [x] Интеграционные тесты GTFS-RT и Service Status
+- [ ] Парсинг GTFS Static (stops, routes, trips)
+- [ ] Подключение GTFS-RT (tripUpdates, vehiclePositions)
+- [ ] Endpoint `/stops/nearby`
+- [ ] Endpoint `/stops/{id}/departures`
+- [ ] Telegram-бот (отдельный репо)
 
 ## Референсы
+
 - [nyctrains](https://github.com/arrismo/nyctrains) — аналогичная архитектура для MTA Нью-Йорка
 - [gtfs_kit docs](https://github.com/mrcagney/gtfs_kit) — парсинг GTFS Static
 - [morningcashee.com](https://www.morningcashee.com/blog/2024/06/13/getting-realtime-transit-data/) — туториал по STM GTFS-RT на Python
-
-## Статус
-- [ ] Зарегистрироваться на portail.developpeurs.stm.info
-- [ ] Инициализировать проект (`uv init stm-api`)
-- [ ] Парсинг GTFS Static (stops, routes, trips)
-- [ ] Подключение GTFS-RT (tripUpdates)
-- [ ] Endpoint `/stops/nearby`
-- [ ] Endpoint `/stops/{id}/departures`
-- [ ] Docker Compose
-- [ ] README с архитектурной схемой
-- [ ] Telegram-бот (отдельный репо)
-
-## Конфигурация (pydantic-settings)
-
-```python
-# app/config.py
-from pydantic_settings import BaseSettings, SettingsConfigDict
-
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
-
-    stm_api_key: str
-    stm_trip_updates_url: str = "https://api.stm.info/pub/od/gtfs-rt/ic/v2/tripUpdates"
-    stm_vehicle_positions_url: str = "https://api.stm.info/pub/od/gtfs-rt/ic/v2/vehiclePositions"
-    gtfs_static_url: str = "https://www.stm.info/sites/default/files/gtfs/gtfs_stm.zip"
-
-    gtfs_cache_ttl: int = 3600        # секунды, как часто обновлять GTFS Static
-    realtime_cache_ttl: int = 15      # секунды, как часто обновлять GTFS-RT
-    nearby_stops_radius: int = 500    # метры по умолчанию
-
-settings = Settings()
-```
-
-`.env.example`:
-```dotenv
-STM_API_KEY=your_api_key_here
-# остальные поля опциональны — есть дефолты
-```
-
-Использование в приложении:
-```python
-from app.config import settings
-
-headers = {"apikey": settings.stm_api_key}
-response = await client.get(settings.stm_trip_updates_url, headers=headers)
-```
