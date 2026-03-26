@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 
+from core.routers import health, vehicles
+
 app = FastAPI()
 
-
-@app.get("/ping")
-async def healthcheck():
-    return {"status": "ok"}
+app.include_router(health.router)
+app.include_router(vehicles.router)
