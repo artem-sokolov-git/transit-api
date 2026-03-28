@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from core.routers import health, vehicles
+from core.routers import health, trips, vehicles
 
 app = FastAPI(
     title="STM API",
@@ -10,3 +10,4 @@ app = FastAPI(
 
 app.include_router(health.router)
 app.include_router(vehicles.router)
+app.include_router(trips.router)
