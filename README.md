@@ -26,101 +26,10 @@ REST API поверх открытых данных STM (Société de transport 
 - **ty** — проверка типов
 - **Docker / Docker Compose** — контейнеризация
 
-## Структура проекта
-
-```
-stm-api/
-├── core/
-│   ├── __init__.py
-│   ├── config.py           # pydantic-settings: токен, URL endpoints
-│   ├── client.py           # httpx.AsyncClient factory с apikey заголовком
-│   ├── main.py             # FastAPI app
-│   ├── filters/
-│   │   └── vehicles.py     # VehicleFilter dataclass (query params)
-│   ├── models/
-│   │   └── vehicles.py     # VehiclePosition Pydantic model
-│   ├── routers/
-│   │   ├── health.py       # GET /ping
-│   │   └── vehicles.py     # GET /vehicles
-│   └── services/
-│       └── vehicles.py     # fetch_vehicles(): GTFS-RT → VehiclePosition
-├── tests/
-│   ├── conftest.py         # pytest fixtures (httpx.Client с apikey)
-│   └── test_stm_status.py  # интеграционные тесты STM API
-├── .env                    # переменные окружения (TOKEN)
-├── .pre-commit-config.yaml # ruff + стандартные хуки
-├── docker-compose.yaml
-├── Dockerfile
-├── Makefile
-├── pyproject.toml
-└── uv.lock
-```
-
-## Конфигурация
-
-Настройки читаются из `.env` через `pydantic-settings`:
-
-```python
-# core/config.py
-class Settings(ApplicationSettings, GTFSRealtimeSettings, STMServiceStatusSettings):
-    pass
-
-settings = Settings()
-```
-
-`.env`:
-```dotenv
-TOKEN=your_api_key_here
-```
-
-Переменная `TOKEN` используется как `apikey` в заголовках запросов к STM API.
-
-## API Endpoints
-
-### `GET /ping`
-Healthcheck.
-
-```json
-{"status": "ok"}
-```
-
-### `GET /vehicles`
-Реальные позиции всех активных транспортных средств STM из GTFS-RT фида.
-
-**Query params:**
-
-| Параметр       | Тип  | Описание                          |
-| -------------- | ---- | --------------------------------- |
-| `route_id`     | str  | Фильтр по маршруту (например, `69`) |
-| `direction_id` | int  | Фильтр по направлению (`0` или `1`) |
-
-**Пример ответа:**
-
-```json
-[
-  {
-    "id": "string",
-    "route_id": "69",
-    "direction_id": 0,
-    "trip_id": "string",
-    "latitude": 45.508,
-    "longitude": -73.587,
-    "bearing": 180.0,
-    "speed": 10.5,
-    "current_status": 2,
-    "stop_id": "string",
-    "occupancy_status": 1,
-    "timestamp": 1711500000
-  }
-]
-```
-
 ## Архитектура
 
-Поток данных для `/vehicles`:
-
 ```
-router → service → STM GTFS-RT (protobuf) → VehiclePosition models → фильтрация
+router → service → STM GTFS-RT (protobuf) → Pydantic models → фильтрация
 ```
 
 - **Routers** (`core/routers/`) — HTTP-слой, принимают query params через `Depends()`
@@ -165,20 +74,21 @@ uv run pytest tests/test_stm_status.py::test_vehicle_positions
 Push в `main` → GitHub Actions → сборка Docker-образа → push в GitHub Container Registry (`ghcr.io`).
 Образ тегируется как `latest` и `sha-<commit>`.
 
-## Статус
+## Roadmap
 
-- [x] Зарегистрироваться на portail.developpeurs.stm.info
-- [x] Инициализировать проект (`uv init stm-api`)
-- [x] Конфигурация через pydantic-settings
-- [x] Docker / Docker Compose с healthcheck
+**Готово**
+- [x] Конфигурация через pydantic-settings, Docker / Docker Compose с healthcheck
 - [x] HTTP-клиент (`httpx.AsyncClient`) с pre-injected apikey
-- [x] Интеграционные тесты GTFS-RT и Service Status
-- [x] `GET /vehicles` с фильтрацией по `route_id` и `direction_id`
+- [x] Интеграционные тесты (реальный STM API)
+- [x] `GET /vehicles` — позиции транспорта, фильтрация по `route_id` и `direction_id`
+- [x] `GET /trips` — обновления рейсов, фильтрация по маршруту и направлению
 - [x] CI/CD: GitHub Actions → GHCR
-- [ ] Парсинг GTFS Static (stops, routes, trips)
-- [ ] Endpoint `/stops/nearby`
-- [ ] Endpoint `/stops/{id}/departures`
-- [ ] Telegram-бот (отдельный репо)
+
+**Следующие шаги**
+- [ ] `GET /stops/{stop_id}/departures` — ближайшие отправления с остановки
+- [ ] `GET /stops` — список остановок из GTFS Static
+- [ ] Кэширование GTFS-RT ответов (TTL ~30s) для снижения нагрузки на STM API
+- [ ] `GET /routes/{route_id}` — агрегированный ответ: позиции + рейсы по маршруту
 
 ## Референсы
 
