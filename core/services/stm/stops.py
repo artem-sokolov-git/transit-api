@@ -31,15 +31,9 @@ async def fetch_stop_departures(stop_id: str) -> list[StopDeparture]:
                     direction_id=trip.direction_id,
                     stop_sequence=stu.stop_sequence,
                     arrival_time=stu.arrival.time if stu.HasField("arrival") else None,
-                    arrival_delay=stu.arrival.delay
-                    if stu.HasField("arrival")
-                    else None,
-                    departure_time=stu.departure.time
-                    if stu.HasField("departure")
-                    else None,
-                    departure_delay=stu.departure.delay
-                    if stu.HasField("departure")
-                    else None,
+                    arrival_delay=stu.arrival.delay if stu.HasField("arrival") else None,
+                    departure_time=stu.departure.time if stu.HasField("departure") else None,
+                    departure_delay=stu.departure.delay if stu.HasField("departure") else None,
                 )
             )
 

@@ -26,12 +26,8 @@ async def fetch_trip_updates(filters: TripFilter) -> list[TripUpdate]:
                 stop_id=stu.stop_id,
                 arrival_time=stu.arrival.time if stu.HasField("arrival") else None,
                 arrival_delay=stu.arrival.delay if stu.HasField("arrival") else None,
-                departure_time=stu.departure.time
-                if stu.HasField("departure")
-                else None,
-                departure_delay=stu.departure.delay
-                if stu.HasField("departure")
-                else None,
+                departure_time=stu.departure.time if stu.HasField("departure") else None,
+                departure_delay=stu.departure.delay if stu.HasField("departure") else None,
             )
             for stu in entity.trip_update.stop_time_update
         ]
