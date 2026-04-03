@@ -1,9 +1,9 @@
 from fastapi import APIRouter
 
-from core.models.stops import StopDeparture
-from core.services.stops import fetch_stop_departures
+from core.models.stm.stops import StopDeparture
+from core.services.stm.stops import fetch_stop_departures
 
-router = APIRouter(prefix="/stops", tags=["stops"])
+router = APIRouter(prefix="/stops")
 
 
 @router.get(

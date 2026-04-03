@@ -1,14 +1,14 @@
 from fastapi import HTTPException
 from google.transit import gtfs_realtime_pb2
 
-from core.client import stm_client
+from core.client import auth_client
 from core.config import settings
-from core.filters.vehicles import VehicleFilter
-from core.models.vehicles import VehiclePosition
+from core.filters.stm.vehicles import VehicleFilter
+from core.models.stm.vehicles import VehiclePosition
 
 
 async def fetch_vehicles(filters: VehicleFilter) -> list[VehiclePosition]:
-    async with stm_client() as client:
+    async with auth_client() as client:
         response = await client.get(settings.position_endpoint)
 
     if response.status_code != 200:

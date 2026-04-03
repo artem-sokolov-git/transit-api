@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends
 
-from core.filters.vehicles import VehicleFilter
-from core.models.vehicles import VehiclePosition
-from core.services.vehicles import fetch_vehicles
+from core.filters.stm.vehicles import VehicleFilter
+from core.models.stm.vehicles import VehiclePosition
+from core.services.stm.vehicles import fetch_vehicles
 
-router = APIRouter(prefix="/vehicles", tags=["vehicles"])
+router = APIRouter(prefix="/vehicles")
 
 
 @router.get(

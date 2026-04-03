@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends
 
-from core.filters.trips import TripFilter
-from core.models.trips import TripUpdate
-from core.services.trips import fetch_trip_updates
+from core.filters.stm.trips import TripFilter
+from core.models.stm.trips import TripUpdate
+from core.services.stm.trips import fetch_trip_updates
 
-router = APIRouter(prefix="/trips", tags=["trips"])
+router = APIRouter(prefix="/trips")
 
 
 @router.get(

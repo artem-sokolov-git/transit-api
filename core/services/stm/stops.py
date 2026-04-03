@@ -1,13 +1,13 @@
 from fastapi import HTTPException
 from google.transit import gtfs_realtime_pb2
 
-from core.client import stm_client
+from core.client import auth_client
 from core.config import settings
-from core.models.stops import StopDeparture
+from core.models.stm.stops import StopDeparture
 
 
 async def fetch_stop_departures(stop_id: str) -> list[StopDeparture]:
-    async with stm_client() as client:
+    async with auth_client() as client:
         response = await client.get(settings.trip_updates_endpoint)
 
     if response.status_code != 200:
