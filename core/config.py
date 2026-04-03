@@ -10,8 +10,9 @@ class ApplicationSettings(EnvBaseSettings):
     token: SecretStr
 
 
-class GTFSRealtimeSettings(EnvBaseSettings):
+class STMAPISettings(EnvBaseSettings):
     gtfs_url: str = "https://api.stm.info/pub/od/gtfs-rt/ic/v2"
+    status_url: str = "https://api.stm.info/pub/od/i3/v2/messages"
 
     @property
     def position_endpoint(self) -> str:
@@ -21,16 +22,12 @@ class GTFSRealtimeSettings(EnvBaseSettings):
     def trip_updates_endpoint(self) -> str:
         return f"{self.gtfs_url}/tripUpdates"
 
-
-class STMServiceStatusSettings(EnvBaseSettings):
-    status_url: str = "https://api.stm.info/pub/od/i3/v2/messages"
-
     @property
     def service_status_endpoint(self) -> str:
         return f"{self.status_url}/etatservice"
 
 
-class Settings(ApplicationSettings, GTFSRealtimeSettings, STMServiceStatusSettings):
+class Settings(ApplicationSettings, STMAPISettings):
     pass
 
 
